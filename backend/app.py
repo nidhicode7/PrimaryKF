@@ -88,7 +88,7 @@ The keywords should be SEO-optimized and reflect the main topic of the page base
                 }
             ],
             temperature=0.3,
-            max_tokens=150
+            max_tokens=250
         )
         
         # Extract the response content
