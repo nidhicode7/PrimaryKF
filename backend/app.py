@@ -88,7 +88,8 @@ The keywords should be SEO-optimized and reflect the main topic of the page base
                 }
             ],
             temperature=0.3,
-            max_tokens=250
+            max_tokens=250,
+            response_format={"type": "json_object"}
         )
         
         # Extract the response content
@@ -101,20 +102,40 @@ The keywords should be SEO-optimized and reflect the main topic of the page base
                 raise ValueError("Response is not a dictionary")
             
             # Ensure required fields exist
-            if "primary_keyword" not in keywords_data or "secondary_keywords" not in keywords_data:
-                raise ValueError("Missing required fields")
+            if "primary_keyword" not in keywords_data:
+                raise ValueError("Missing primary_keyword field")
             
-            # Ensure secondary_keywords is a list with exactly 3 items
-            if not isinstance(keywords_data["secondary_keywords"], list) or len(keywords_data["secondary_keywords"]) != 3:
-                raise ValueError("secondary_keywords must be a list with exactly 3 items")
-            
-            return result
+            # Ensure secondary_keywords is a list and has exactly 3 items
+            secondary_keywords = keywords_data.get("secondary_keywords", [])
+            if not isinstance(secondary_keywords, list):
+                secondary_keywords = [] # Default to empty list if not a list
+
+            # Ensure exactly 3 secondary keywords
+            while len(secondary_keywords) < 3:
+                secondary_keywords.append("") # Pad with empty strings if less than 3
+            secondary_keywords = secondary_keywords[:3] # Take only the first 3 if more are returned
+
+            keywords_data["secondary_keywords"] = secondary_keywords
+
+            return json.dumps(keywords_data) # Return as JSON string again
         except json.JSONDecodeError:
             # Try to extract JSON from the response
             import re
             match = re.search(r'\{.*\}', result, re.DOTALL)
             if match:
-                return match.group(0)
+                try:
+                    keywords_data = json.loads(match.group(0))
+                    # Apply the same secondary_keywords validation here
+                    secondary_keywords = keywords_data.get("secondary_keywords", [])
+                    if not isinstance(secondary_keywords, list):
+                        secondary_keywords = []
+                    while len(secondary_keywords) < 3:
+                        secondary_keywords.append("")
+                    secondary_keywords = secondary_keywords[:3]
+                    keywords_data["secondary_keywords"] = secondary_keywords
+                    return json.dumps(keywords_data)
+                except Exception as e:
+                    raise ValueError(f"Failed to parse extracted JSON: {e}")
             raise ValueError("Invalid JSON response from OpenAI")
             
     except Exception as e:
