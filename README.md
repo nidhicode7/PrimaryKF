@@ -1,47 +1,6 @@
-# Primary Keyword Finder
+# AI Keyword Extractor
 
-A web application that helps find primary and secondary keywords from text using OpenAI's GPT-3.5.
-
-## Deployment Instructions
-
-### Frontend (Vercel)
-
-1. Push your code to GitHub
-2. Go to [Vercel](https://vercel.com)
-3. Import your repository
-4. Configure the following settings:
-   - Framework Preset: Create React App
-   - Build Command: `cd frontend && npm install && npm run build`
-   - Output Directory: `frontend/build`
-   - Install Command: `cd frontend && npm install`
-5. Add the following environment variable:
-   - `REACT_APP_API_URL`: Your backend API URL (e.g., https://your-backend-url.onrender.com)
-
-## Local Development
-
-### Frontend
-```bash
-cd frontend
-npm install
-npm start
-```
-
-### Backend
-```bash
-cd backend
-pip install -r requirements.txt
-python app.py
-```
-
-## Environment Variables
-
-### Frontend
-- `REACT_APP_API_URL`: Backend API URL
-
-### Backend
-- `OPENAI_API_KEY`: OpenAI API key
-- `FLASK_ENV`: Environment (development/production)
-- `PORT`: Port number (default: 5000)
+A web application that extracts primary and secondary keywords from any URL using OpenAI's API. Perfect for SEO analysis and content optimization.
 
 ## Features
 
