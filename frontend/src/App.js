@@ -46,10 +46,10 @@ function App() {
       <main className="App-main">
         <form onSubmit={handleSubmit} className="url-form">
           <input
-            type="url"
+            type="text"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="Enter URL (e.g., https://example.com)"
+            placeholder="Enter the URL..."
             required
             className="url-input"
           />

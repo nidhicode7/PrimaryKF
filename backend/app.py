@@ -6,6 +6,7 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 import json
+import re
 
 # Construct the path to the .env file in the project root
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -41,102 +42,74 @@ def extract_seo_elements(html_content):
     if meta_keys:
         meta_keywords = meta_keys.get('content', '')
     
-    # Get h1 tags (often contain important keywords)
-    h1_tags = [h1.get_text().strip() for h1 in soup.find_all('h1')]
-    
     return {
         "title": title,
         "meta_description": meta_description,
-        "meta_keywords": meta_keywords,
-        "h1_tags": h1_tags
+        "meta_keywords": meta_keywords
     }
 
 def extract_keywords(seo_elements):
     """Extract keywords using OpenAI API based on SEO elements."""
     try:
-        # Prepare the SEO elements for analysis
-        seo_text = f"""
-        Page Title: {seo_elements['title']}
-        Meta Description: {seo_elements['meta_description']}
-        Meta Keywords: {seo_elements['meta_keywords']}
-        H1 Tags: {', '.join(seo_elements['h1_tags'])}
-        """
-        
+        page_title = seo_elements['title']
+        meta_description = seo_elements['meta_description']
+        meta_keywords_str = seo_elements['meta_keywords'] # Get meta keywords as well
+
+        prompt_text = f"Assume you are an SEO expert. What would the primary keyword of the page whose title is: {page_title} and the Description of the page is {meta_description} and meta keywords are {meta_keywords_str}. Give the answer in the following format - pk: <primary_keyword>. Also, give me 3 similar keywords to that of the primary keyword in the following format: kw: <k1>, <k2>, <k3>"
+
         response = client.chat.completions.create(
             model="gpt-4-turbo",
             messages=[
                 {
                     "role": "system",
-                    "content": """You are an expert SEO keyword analyzer. Your task is to analyze webpage metadata and extract:
-1. One primary keyword (most important, main topic)
-2. Three secondary keywords (closely related to the primary keyword)
-
-Focus ONLY on the page title, meta description, meta keywords, and H1 tags.
-Do NOT analyze the main content of the page.
-
-Return ONLY a JSON object in this exact format:
-{
-    "primary_keyword": "main keyword",
-    "secondary_keywords": ["keyword1", "keyword2", "keyword3"]
-}
-
-The keywords should be SEO-optimized and reflect the main topic of the page based on its metadata."""
+                    "content": "You are an SEO expert. You will be given a page title, meta description, and meta keywords. You must extract one primary keyword and three secondary keywords. Your output MUST strictly follow this format: pk: <primary_keyword>. Also, give me 3 similar keywords to that of the primary keyword in the following format: kw: <k1>, <k2>, <k3>."
                 },
                 {
                     "role": "user",
-                    "content": f"Analyze these SEO elements and extract the most relevant keywords: {seo_text}"
+                    "content": prompt_text
                 }
             ],
             temperature=0.3,
-            max_tokens=250,
-            response_format={"type": "json_object"}
+            max_tokens=250 # Increased max_tokens to allow for longer responses if needed
+            # Removed response_format={"type": "json_object"} as output format is now custom string
         )
         
         # Extract the response content
         result = response.choices[0].message.content.strip()
-        
-        # Validate and clean the response
-        try:
-            keywords_data = json.loads(result)
-            if not isinstance(keywords_data, dict):
-                raise ValueError("Response is not a dictionary")
-            
-            # Ensure required fields exist
-            if "primary_keyword" not in keywords_data:
-                raise ValueError("Missing primary_keyword field")
-            
-            # Ensure secondary_keywords is a list and has exactly 3 items
-            secondary_keywords = keywords_data.get("secondary_keywords", [])
-            if not isinstance(secondary_keywords, list):
-                secondary_keywords = [] # Default to empty list if not a list
+        print(f"DEBUG: OpenAI raw response (custom format): {result}") # Debugging the raw response
 
-            # Ensure exactly 3 secondary keywords
-            while len(secondary_keywords) < 3:
-                secondary_keywords.append("") # Pad with empty strings if less than 3
-            secondary_keywords = secondary_keywords[:3] # Take only the first 3 if more are returned
+        primary_keyword = ""
+        secondary_keywords = []
 
-            keywords_data["secondary_keywords"] = secondary_keywords
+        pk_start = result.find("pk: ")
+        kw_start = result.find("kw: ")
 
-            return json.dumps(keywords_data) # Return as JSON string again
-        except json.JSONDecodeError:
-            # Try to extract JSON from the response
-            import re
-            match = re.search(r'\{.*\}', result, re.DOTALL)
-            if match:
-                try:
-                    keywords_data = json.loads(match.group(0))
-                    # Apply the same secondary_keywords validation here
-                    secondary_keywords = keywords_data.get("secondary_keywords", [])
-                    if not isinstance(secondary_keywords, list):
-                        secondary_keywords = []
-                    while len(secondary_keywords) < 3:
-                        secondary_keywords.append("")
-                    secondary_keywords = secondary_keywords[:3]
-                    keywords_data["secondary_keywords"] = secondary_keywords
-                    return json.dumps(keywords_data)
-                except Exception as e:
-                    raise ValueError(f"Failed to parse extracted JSON: {e}")
-            raise ValueError("Invalid JSON response from OpenAI")
+        if pk_start != -1:
+            pk_start += len("pk: ")
+            if kw_start != -1 and kw_start > pk_start:
+                primary_keyword = result[pk_start:kw_start].strip()
+            else:
+                primary_keyword = result[pk_start:].strip()
+
+        if kw_start != -1:
+            kw_start += len("kw: ")
+            secondary_keywords_str = result[kw_start:].strip()
+            secondary_keywords = [k.strip() for k in secondary_keywords_str.split(',') if k.strip()]
+
+        print(f"DEBUG: Parsed primary_keyword: '{primary_keyword}'") # New debug print
+
+        # Ensure exactly 3 secondary keywords
+        while len(secondary_keywords) < 3:
+            secondary_keywords.append("") # Pad with empty strings if less than 3
+        secondary_keywords = secondary_keywords[:3] # Take only the first 3 if more are returned
+
+        # Format the output as JSON for the frontend
+        output_data = {
+            "primary_keyword": primary_keyword,
+            "secondary_keywords": secondary_keywords
+        }
+        print(f"DEBUG: Backend returning JSON: {json.dumps(output_data)}") # Added debug print
+        return json.dumps(output_data)
             
     except Exception as e:
         raise Exception(f"Error in keyword extraction: {str(e)}")
@@ -150,9 +123,9 @@ def extract_keywords_from_url():
         if not url:
             return jsonify({"error": "URL is required"}), 400
 
-        # Validate URL format
+        # Add https:// if no scheme is provided
         if not url.startswith(('http://', 'https://')):
-            return jsonify({"error": "Invalid URL format"}), 400
+            url = "https://" + url
 
         # Fetch webpage content
         headers = {
