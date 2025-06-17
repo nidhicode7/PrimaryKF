@@ -2,6 +2,7 @@
 
 A web application that extracts primary and secondary keywords from any URL using OpenAI's API. Perfect for SEO analysis and content optimization.
 
+
 ## Features
 
 - Extract one primary keyword and three secondary keywords from any URL
